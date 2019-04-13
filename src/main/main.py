@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import random as rand
+import codecs
+from pathlib import PureWindowsPath
 
 def train(model, dataset, iterations, block_size):
 
@@ -30,8 +32,16 @@ def train(model, dataset, iterations, block_size):
             print(running_loss)
             running_loss = 0.0
 
-cheesestring = "cheese"*10000
-cheesetensor = torch.tensor([ord(c) for c in cheesestring])
+f = open(PureWindowsPath('c://Users/Edwin/Documents/enwik8/enwik8.txt'),mode="r",encoding="utf-8")
+if f.mode == 'r':
 
-train(ConvLM.ConvLM(), cheesetensor, 100000, 2000)
+    inputlist = []
+    while True:
+        c = f.read(1)
+        if not c:
+            break
+        inputlist.append(ord(c))
+    inputtensor=torch.tensor(inputlist)
+
+    train(ConvLM.ConvLM(), inputtensor, 10000, 2000)
 
