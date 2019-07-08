@@ -32,7 +32,7 @@ def train(model, dataset, iterations, block_size):
             print(running_loss)
             running_loss = 0.0
 
-f = open(pathlib.Path('Data/enwik8').resolve(),mode="rb")
+f = open(pathlib.Path('../../data/enwik8').resolve(),mode="rb")
 #cheesestring = "cheese"*1000000
 #cheesetensor = torch.tensor([ord(c) for c in cheesestring])
 if f.mode == 'rb':
