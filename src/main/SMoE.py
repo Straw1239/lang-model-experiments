@@ -11,7 +11,9 @@ def sparse_MoE(experts, inputs, weightMat, numOut, epsilon=0.2, gradEps=0.2):
     cumW = torch.cumsum(topW, 1)
     device = inputs.device
     
-    sparse_weight = F.relu(torch.clamp(F.pad(cumW[:, 1:], (0, 1), 'constant', 1), max=1-epsilon) - cumW)
+    capped = torch.clamp(cumW, max=1-epsilon)
+    sparse_weight = F.relu(capped - cumW + topW)
+    
     softCost = torch.sum(torch.where(F.pad(sparse_weight[:, 1:], (0, 1), 'constant', 0) > 0, torch.ones(1, device=device), sparse_weight), 1)
         
     sparse_weight = torch.gather(sparse_weight, 1, index)
@@ -25,14 +27,15 @@ def sparse_MoE(experts, inputs, weightMat, numOut, epsilon=0.2, gradEps=0.2):
     topG, Gindex = torch.sort(weightMat / torch.sum(weightMat, 0), 0, descending=True)
     GcumW = torch.cumsum(topG, 0)
     GSW =  (torch.clamp(F.pad(GcumW[1:, :], (0, 0, 0, 1), 'constant', 1), max=1 - gradEps) - GcumW) > 0
-    #print(usage.sum(1))
+    
     usage |= torch.gather(GSW, 0, Gindex)
-    #print(usage.sum(1))
+    
     
     outputs = torch.zeros(len(inputs), numOut, device=device)
+    usage_t = usage.t().contiguous()
     for i, e in enumerate(experts):
-        einput = torch.masked_select(inputs.t(), usage.t()[i]).view(-1, inputs.shape[1])
-        input_indexes = torch.nonzero(usage.t()[i])
+        input_indexes = torch.nonzero(usage_t[i])
+        einput = torch.index_select(inputs, 0, input_indexes.squeeze())
         #print(input_indexes.shape)
         outputs.scatter_add_(0, input_indexes.expand(-1, outputs.shape[1]), sparse_weight[input_indexes, i] * e(einput))
     return outputs, softCost
@@ -62,6 +65,8 @@ def test_SMoE(nExp=8192):
 if __name__=='__main__':
     test_SMoE()
 
+costHistory = []
+from normalization import ILBN
 class SMoE(nn.Module):
     def __init__(self, experts, nIn, nOut, epsilon=0.2, gEps=0.2, sFactor=5):
         
@@ -69,19 +74,19 @@ class SMoE(nn.Module):
         self.experts = experts
         for idx, e in enumerate(experts):
             self.add_module(str(idx), e)
-        self.selector = nn.Sequential(nn.Linear(nIn, len(experts)), nn.Softmax(1))
-        self.selector[0].weight.data *= sFactor
-        self.selector[0].bias.data *= sFactor
+        self.selector = nn.Sequential(ILBN(nn.Linear(nIn, len(experts))), nn.Softmax(1))
+        self.selector[0].lin.weight.data *= sFactor
+        self.selector[0].lin.bias.data *= sFactor
         self.nOut = nOut
         self.eps = epsilon
         self.gEps = gEps
-        self.costHistory = []
+
 
 
     def forward(self, x):
         weightMat = self.selector(x)
         out, costs = sparse_MoE(self.experts, x, weightMat, self.nOut, self.eps, self.gEps)
-        self.costHistory.append(costs)
+        costHistory.append(costs)
         return out
                          
 

@@ -29,16 +29,20 @@ class CausalConv1d(nn.Conv1d):
 
         return super(CausalConv1d, self).forward(x)
 
+import models
+    
 class ConvLM(nn.Module):
     def __init__(self):
         super(ConvLM,self).__init__()
-        self.embd = nn.Embedding(256, 10)
-        self.conv1 = CausalConv1d(10, 1000, 3)
-        self.conv2 = CausalConv1d(1010, 256, 3)
+        self.embd = nn.Embedding(256, 256)
+        self.conv1 = CausalConv1d(256, 256, 32, groups=64)
+        
+        self.conv2 = CausalConv1d(256, 256, 1)
 
     def forward(self, x):
 
         x = self.embd(x).permute(0,2,1)
-        l1out = F.selu(self.conv1(x))
-        x = self.conv2(torch.cat((x, l1out),1))
+        x = F.selu(self.conv1(x))
+        
+        x = self.conv2(x)
         return x
